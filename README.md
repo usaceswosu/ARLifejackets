@@ -28,3 +28,4 @@ pip install -r requirements.txt
 ```bash
 git clone https://github.com/yourusername/ARLifejackets.git
 cd ARLifejackets
+python main.py
