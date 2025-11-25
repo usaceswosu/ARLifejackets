@@ -58,12 +58,31 @@ def switch_set(event, x, y, flags, param):
 mp_pose = mp.solutions.pose
 pose = mp_pose.Pose(static_image_mode=False, min_detection_confidence=0.5)
 
-cap = cv2.VideoCapture(1)
+# --- Camera Auto-Detection ---
+def find_camera(max_tested=10):
+    print("Searching for available camera...")
+    for i in range(max_tested):
+        cap = cv2.VideoCapture(i)
+        if cap.isOpened():
+            print(f"Camera found at index {i}")
+            cap.release()
+            return i
+        cap.release()
+    print("No usable camera detected.")
+    return None
+
+camera_index = find_camera()
+if camera_index is None:
+    print("ERROR: No camera available")
+    exit()
+
+cap = cv2.VideoCapture(camera_index)
 cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1920)
 cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 1080)
 if not cap.isOpened():
     print("Error: Could not open webcam")
     exit()
+
 
 prev_coords = {}
 person_counter = 0
@@ -309,4 +328,5 @@ while True:
 
 cap.release()
 cv2.destroyAllWindows()
+
 
