@@ -48,13 +48,6 @@ for outfit in outfit_sets:
     else:
         processed_buttons.append((img, None))
 
-def switch_set(event, x, y, flags, param):
-    global window_click_x, window_click_y
-    if event == cv2.EVENT_LBUTTONDOWN:
-        window_click_x = x
-        window_click_y = y
-        # Coordinate transformation happens in main loop
-
 mp_pose = mp.solutions.pose
 pose = mp_pose.Pose(static_image_mode=False, min_detection_confidence=0.5)
 
@@ -83,13 +76,19 @@ if not cap.isOpened():
     print("Error: Could not open webcam")
     exit()
 
-
 prev_coords = {}
 person_counter = 0
 alpha = 0.3
 
 cv2.namedWindow('AR Outfit Overlay', cv2.WINDOW_NORMAL)
 cv2.setWindowProperty('AR Outfit Overlay', cv2.WND_PROP_FULLSCREEN, cv2.WINDOW_FULLSCREEN)
+
+def switch_set(event, x, y, flags, param):
+    global window_click_x, window_click_y
+    if event == cv2.EVENT_LBUTTONDOWN:
+        window_click_x = x
+        window_click_y = y
+
 cv2.setMouseCallback('AR Outfit Overlay', switch_set)
 
 def match_person(x_center, y_center, prev_coords):
@@ -146,6 +145,40 @@ def scale_to_screen(frame, screen_w, screen_h):
     canvas[y_offset:y_offset+new_h, x_offset:x_offset+new_w] = resized
     return canvas
 
+# --- Credits Overlay Function ---
+def draw_credits(frame, names, affiliation, logo_path):
+    font = cv2.FONT_HERSHEY_SIMPLEX
+    font_scale = 0.7
+    color = (255, 255, 255)
+    thickness = 2
+    padding = 20
+
+    base_y = frame.shape[0] - 100
+    cv2.putText(frame, "Developed by:", (padding, base_y), font, font_scale, color, thickness)
+    cv2.putText(frame, names, (padding, base_y + 30), font, font_scale, color, thickness)
+    cv2.putText(frame, affiliation, (padding, base_y + 60), font, font_scale, color, thickness)
+
+    logo = cv2.imread(logo_path, cv2.IMREAD_UNCHANGED)
+    if logo is not None:
+        target_width = int(frame.shape[1] * 0.12)
+        scale = target_width / logo.shape[1]
+        target_height = int(logo.shape[0] * scale)
+        logo = cv2.resize(logo, (target_width, target_height), interpolation=cv2.INTER_AREA)
+
+        logo_x = frame.shape[1] - logo.shape[1] - padding
+        logo_y = frame.shape[0] - logo.shape[0] - padding
+
+        if logo.shape[2] == 4:
+            b, g, r, a = cv2.split(logo)
+            alpha = a / 255.0
+            overlay = cv2.merge((b, g, r))
+            roi = frame[logo_y:logo_y+logo.shape[0], logo_x:logo_x+logo.shape[1]]
+            for c in range(3):
+                roi[:, :, c] = (alpha * overlay[:, :, c] + (1 - alpha) * roi[:, :, c]).astype(np.uint8)
+        else:
+            frame[logo_y:logo_y+logo.shape[0], logo_x:logo_x+logo.shape[1]] = logo
+
+# --- Main Loop ---
 screen_w = 1920
 screen_h = 1080
 
@@ -162,7 +195,6 @@ while True:
         for box in boxes:
             if int(box.cls[0]) != 0:
                 continue
-
             x1, y1, x2, y2 = map(int, box.xyxy[0])
             cropped_person = frame[y1:y2, x1:x2]
             if cropped_person.size == 0:
@@ -218,7 +250,6 @@ while True:
 
                 head_coords_defined = True
 
-            # Determine person ID for smoothing
             x_center = (x_start_torso + x_end_torso) / 2 if torso_img is not None else (x_start_head + x_end_head) / 2
             y_center = (y_start_torso + y_end_torso) / 2 if torso_img is not None else (y_start_head + y_end_head) / 2
 
@@ -227,26 +258,22 @@ while True:
                 person_id = person_counter
                 person_counter += 1
 
-            # Smoothing coordinates
             if person_id in prev_coords:
                 if torso_img is not None:
                     x_start_torso = int(alpha * x_start_torso + (1 - alpha) * prev_coords[person_id]['x_start'])
                     x_end_torso = int(alpha * x_end_torso + (1 - alpha) * prev_coords[person_id]['x_end'])
                     y_start_torso = int(alpha * y_start_torso + (1 - alpha) * prev_coords[person_id]['y_start'])
                     y_end_torso = int(alpha * y_end_torso + (1 - alpha) * prev_coords[person_id]['y_end'])
-
                 if head_img is not None and head_coords_defined:
                     hx_start_prev = prev_coords[person_id].get('hx_start') or x_start_head
                     hx_end_prev = prev_coords[person_id].get('hx_end') or x_end_head
                     hy_start_prev = prev_coords[person_id].get('hy_start') or y_start_head
                     hy_end_prev = prev_coords[person_id].get('hy_end') or y_end_head
-
                     x_start_head = int(alpha * x_start_head + (1 - alpha) * hx_start_prev)
                     x_end_head = int(alpha * x_end_head + (1 - alpha) * hx_end_prev)
                     y_start_head = int(alpha * y_start_head + (1 - alpha) * hy_start_prev)
                     y_end_head = int(alpha * y_end_head + (1 - alpha) * hy_end_prev)
 
-            # Save smoothed coordinates
             current_coords[person_id] = {
                 'x_start': x_start_torso if torso_img is not None else x_start_head,
                 'x_end': x_end_torso if torso_img is not None else x_end_head,
@@ -258,21 +285,17 @@ while True:
                 'hy_end': y_end_head if head_img is not None and head_coords_defined else None
             }
 
-            # Apply overlays
             if torso_img is not None:
                 overlay_image(frame, torso_img, x_start_torso, y_start_torso, x_end_torso, y_end_torso)
-
             if head_img is not None and head_coords_defined:
                 overlay_image(frame, head_img, x_start_head, y_start_head, x_end_head, y_end_head)
 
-    # Update previous coordinates for smoothing
     prev_coords = current_coords
 
     # Draw buttons
     for i, (bx, by) in enumerate(button_positions):
         overlay, mask = processed_buttons[i]
         h, w = overlay.shape[:2]
-
         if mask is not None:
             for c in range(3):
                 frame[by:by+h, bx:bx+w, c] = (
@@ -282,33 +305,25 @@ while True:
         else:
             frame[by:by+h, bx:bx+w] = overlay
 
-    # Scale frame to fullscreen with correct aspect ratio
     display_frame = scale_to_screen(frame, screen_w, screen_h)
 
-    # Reverse-scale UI interactions
-    # Compute offsets from scale_to_screen()
+    # Transform clicks
     h, w = frame.shape[:2]
     frame_ratio = w / h
     screen_ratio = screen_w / screen_h
-
     if frame_ratio > screen_ratio:
         new_w = screen_w
         new_h = int(screen_w / frame_ratio)
     else:
         new_h = screen_h
         new_w = int(screen_h * frame_ratio)
-
     x_offset = (screen_w - new_w) // 2
     y_offset = (screen_h - new_h) // 2
 
-    # Transform click coords → frame coords
-    if window_click_x != 0 or window_click_y != 0:  # Only process if there was a click
+    if window_click_x != 0 or window_click_y != 0:
         fx = (window_click_x - x_offset) * (w / new_w)
         fy = (window_click_y - y_offset) * (h / new_h)
-
-        # If click is inside actual frame region
         if 0 <= fx < w and 0 <= fy < h:
-            # Now check buttons using transformed coords
             for i, (bx, by) in enumerate(button_positions):
                 bw, bh = button_size
                 if bx <= fx <= bx + bw and by <= fy <= by + bh:
@@ -316,17 +331,20 @@ while True:
                     torso_img, head_img = load_current_set()
                     print(f"Switched outfit: {outfit_sets[i]}")
                     break
-        
-        # Reset click coordinates after processing
         window_click_x = 0
         window_click_y = 0
 
-    cv2.imshow('AR Outfit Overlay', display_frame)
+    # --- Draw Credits + Logo ---
+    draw_credits(
+        display_frame,
+        names="Zeb Rowley, Abraham, Silas, & Jewelian",
+        affiliation="SWOSU Computer Science Dept.",
+        logo_path="school_logo.png"
+    )
 
+    cv2.imshow('AR Outfit Overlay', display_frame)
     if cv2.waitKey(1) & 0xFF == ord('q'):
         break
 
 cap.release()
 cv2.destroyAllWindows()
-
-
