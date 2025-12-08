@@ -23,8 +23,8 @@ pip install -r requirements.txt
 
 ## Setup!
 
-Step 1: Download the file through the blue code button and just click Download ZIP.
+Step 1: Download the file by clicking the blue code button on the home page of this GitHub and then selecting "Download ZIP".
 Step 2: Find the file in your downloads and drag it to your desktop
-Step 3: Right click the File and press Extract All. Once thats done you can delete the one with a zipper on the file.
-Step 4: open that new file that showed up on your desktop and open the setup.bat file.
+Step 3: Right-click the File and press Extract All. Once that's done, you can delete the one with a zipper on the file.
+Step 4: Open the new file that appeared on your desktop and then open the setup.bat file.
 Step 5: Enjoy!
