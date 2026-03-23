@@ -14,7 +14,7 @@ window_click_y = 0
 model = YOLO("yolov8n.pt")
 
 outfit_sets = [
-    {'torso': 'lifejacket.png', 'head': None},
+    {'torso': 'lifejacket2.png', 'head': None},
     {'torso': 'ranger_vest.png', 'head': 'ranger_hat.png'},
     {'torso': 'volunteer_vest.png', 'head': 'volunteer_hat.png'}
 ]
